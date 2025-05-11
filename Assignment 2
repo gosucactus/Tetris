@@ -1,6 +1,3 @@
-// Kaitlin Dixon, 25006454 - Navid Rahimi, 24017038 - Ari Lewis-Clarke, 24016664
-
-import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 
@@ -10,61 +7,75 @@ public class Tetris extends GameEngine {
 		createGame(new Tetris(), 30);
 	}
 
-	// Game state variables
-	boolean moveLeftPressed, moveRightPressed, rotatePressed, moveDownPressed, dropPressed;
-	boolean holdLeft, holdRight, holdDown;
-	boolean isPaused = false;
-	int pauseMenuSelection = 0;
-	String[] pauseMenuOptions = {"Resume", "Help", "Quit"};
-	boolean isResuming = false;
-	boolean showHelp = false;
-	boolean showCountdown = false;
-	long countdownStartTime;
-	int countdownSeconds = 3;
-	boolean isGameOver = false;
-
-	// Board configuration and state
+	// Board dimensions & playfield
 	final int WIDTH = 10;
 	final int HEIGHT = 20;
 	int[][] grid = new int[WIDTH][HEIGHT];
+
+	// Tile palette
 	Color[] tileColors = {black, cyan, blue, orange, yellow, green, pink, red};
+
+	// Score & level
 	int playerScore = 0;
 	int currentLevel = 1;
 
-	// Timing variables for movement and update pacing
-	float tickDelay = 0.15f;
-	float tickTime = 0f;
-	float gameStepDelay = 1f;
-	float gameStepTime = 0f;
-
-	// Tetromino piece position and shape
+	// Active piece state
 	int pieceColor = 1;
 	int pieceX = WIDTH / 2;
 	int pieceY = 0;
 	int[][] activeShape = {{0,0}, {0,1}, {1,1}, {1,2}};
 
-	// All tetromino shapes
+	// All seven tetriminos
 	int[][][] shapes = {
-			{{-1, 0}, {0, 0}, {1, 0}, {2, 0}},
-			{{-1, 0}, {0, 0}, {1, 0}, {1, 1}},
-			{{-1, 1}, {-1, 0}, {0, 0}, {1, 0}},
-			{{0, 0}, {0, 1}, {1, 0}, {1, 1}},
-			{{-1, 1}, {0, 1}, {0, 0}, {1, 0}},
-			{{-1, 0}, {0, 0}, {1, 0}, {0, 1}},
-			{{-1, 0}, {0, 0}, {0, 1}, {1, 1}}
+			{{-1, 0}, {0, 0}, {1, 0}, {2, 0}}, // I
+			{{-1, 0}, {0, 0}, {1, 0}, {1, 1}}, // J
+			{{-1, 1}, {-1, 0}, {0, 0}, {1, 0}}, // L
+			{{0, 0}, {0, 1}, {1, 0}, {1, 1}}, // O
+			{{-1, 1}, {0, 1}, {0, 0}, {1, 0}}, // S
+			{{-1, 0}, {0, 0}, {1, 0}, {0, 1}}, // T
+			{{-1, 0}, {0, 0}, {0, 1}, {1, 1}} // Z
 	};
 
-	// Initialize the game window and board
+	// Game state flags & menus
+	boolean isGameOver = false;
+	boolean isPaused = false;
+	boolean showHelp = false;
+	boolean showCountdown = false;
+	boolean isResuming = false;
+
+	int pauseMenuSelection = 0;
+	String[] pauseMenuOptions = {"Resume", "Help", "Quit"};
+
+	// Countdown timer
+	long countdownStartTime;
+	int countdownSeconds = 3;
+
+	// Fall & lock timers
+	private double fallInterval = 1.0;
+	private double fallTimer = 0.0;
+	private final double lockDelay = 0.5;
+	private double lockTimer = 0.0;
+
+	// DAS/ARR (Delayed Auto Shift/Auto Repeat, horizontal movement)
+	private double dasDelay = 0.15;
+	private double arrInterval = 0.05;
+	private double leftHeldTime = 0, rightHeldTime = 0;
+	private boolean leftHeld = false, rightHeld = false;
+
+	// Soft drop flag
+	private boolean softDropping = false;
+
+	// Initialise the game window and board
 	public void init() {
 		setWindowSize(350, 420);
 		clearBoard();
 	}
 
+	// Restart game
 	public void restartGame() {
 		playerScore = 0;
 		currentLevel = 1;
-		tickTime = 0f;
-		gameStepTime = 0f;
+
 		isPaused = false;
 		showHelp = false;
 		showCountdown = false;
@@ -75,53 +86,56 @@ public class Tetris extends GameEngine {
 
 	// Update the game state every frame
 	public void update(double dt) {
-		// Stop updating if the game is over
-		if (isGameOver) return;
-		// Countdown delay before resuming game, game resumes in 3 seconds but sped up by 1.5x
-		if (showCountdown) {
-			long elapsed = (long)((System.currentTimeMillis() - countdownStartTime) / (1000 / 1.5));
-			if (elapsed >= countdownSeconds) {
-				showCountdown = false; // Resume game
+		double maxDt = 0.1;
+		if(dt > maxDt) dt = maxDt;
+		if (isGameOver || isPaused || showCountdown) {
+			// handle countdown
+			if (showCountdown) {
+				long elapsed = (long)((System.currentTimeMillis() - countdownStartTime) / (1000 / 1.5));
+				if (elapsed >= countdownSeconds) showCountdown = false;
 			}
-			return; // Doesnt process game logic during countdown
+			return;
 		}
-		boolean manualMove = false;
-		if (isPaused) return;
 
-		tickTime += (float) dt;
-		gameStepTime += (float) dt;
-
-		// Handle repeated movement input
-		if (tickTime > tickDelay) {
-			tickTime -= tickDelay;
-			if (moveLeftPressed || holdLeft) {
-				moveLeft();
-				moveLeftPressed = false;
+		// DAS/ARR for L/R movement
+		if (leftHeld) {
+			leftHeldTime += dt;
+			if (leftHeldTime >= dasDelay) {
+				// how many repeats?
+				int repeats = (int)((leftHeldTime - dasDelay) / arrInterval);
+				// only perform new moves
+				for (int i=0; i<repeats; i++) moveLeft();
+				// subtract consumed time
+				leftHeldTime = dasDelay + (leftHeldTime - dasDelay) % arrInterval;
 			}
-			if (moveRightPressed || holdRight) {
-				moveRight();
-				moveRightPressed = false;
-			}
-			if (moveDownPressed || holdDown) {
-				stepDown();
-				moveDownPressed = false;
-				manualMove = true;
-			}
-			if (rotatePressed) {
-				rotatePiece();
-				rotatePressed = false;
-			}
-			if (dropPressed) {
-				instantDrop();
-				dropPressed = false;
-				manualMove = true;
+		}
+		if (rightHeld) {
+			rightHeldTime += dt;
+			if (rightHeldTime >= dasDelay) {
+				int repeats = (int)((rightHeldTime - dasDelay) / arrInterval);
+				for (int i=0; i<repeats; i++) moveRight();
+				rightHeldTime = dasDelay + (rightHeldTime - dasDelay) % arrInterval;
 			}
 		}
 
-		// Move the tetromino down automatically over time
-		if (gameStepTime > gameStepDelay) {
-			gameStepTime -= gameStepDelay;
-			if (!manualMove) stepDown();
+		// at top of update(dt):
+		double interval = softDropping ? (fallInterval / 20.0) : fallInterval;
+		fallTimer += dt;
+		while (fallTimer >= interval) {
+			fallTimer -= interval;
+			if (isLanded()) {
+				// on ground, start/increment lock timer
+				lockTimer += interval;
+				if (lockTimer >= lockDelay) {
+					lockTimer = 0;
+					lockPiece();
+					return;
+				}
+			} else {
+				// still falling
+				lockTimer = 0;
+				pieceY++;
+			}
 		}
 	}
 
@@ -131,7 +145,18 @@ public class Tetris extends GameEngine {
 		changeBackgroundColor(black);
 		clearBackground(mWidth, mHeight);
 
-		// Draw the border walls
+		// grid lines
+		changeColor(50, 50, 50); // subtle grey
+		for (int x = 0; x <= WIDTH; x++) {
+			int px = (x + 1) * 20; // because your playfield starts at x+1
+			drawLine(px, 0, px, HEIGHT * 20);
+		}
+		for (int y = 0; y <= HEIGHT; y++) {
+			int py = y * 20;
+			drawLine(20, py, (WIDTH + 1) * 20, py); // from left wall to right wall
+		}
+
+		// draw the border walls
 		changeColor(128, 128, 128);
 		for (int y = 0; y <= HEIGHT; y++) {
 			drawSolidRectangle(1, y * 20 + 1, 18, 18);
@@ -141,7 +166,7 @@ public class Tetris extends GameEngine {
 			drawSolidRectangle((x + 1) * 20 + 1, HEIGHT * 20 + 1, 18, 18);
 		}
 
-		// Draw all placed tiles on the board
+		// draw all placed tiles on the board
 		for (int y = 0; y < HEIGHT; y++) {
 			for (int x = 0; x < WIDTH; x++) {
 				changeColor(tileColors[grid[x][y]]);
@@ -149,7 +174,7 @@ public class Tetris extends GameEngine {
 			}
 		}
 
-		// Shows countdown numbers on screen
+		// shows countdown numbers on screen
 		if (showCountdown) {
 			long elapsed = (long)((System.currentTimeMillis() - countdownStartTime) / (1000 / 1.5));
 			long remaining = countdownSeconds - elapsed;
@@ -163,9 +188,9 @@ public class Tetris extends GameEngine {
 			return;
 		}
 
-		// Below is the game over screen
+		// below is the game over screen
 		if (isGameOver) {
-			// Displays "Game Over!", displays final scores and restart instructions
+			// displays "Game Over!", displays final scores and restart instructions
 			changeColor(white);
 			drawBoldText(90, 130, "Game Over!", 30);
 			drawText(80, 170, "Final Score: " + playerScore, 20);
@@ -174,9 +199,9 @@ public class Tetris extends GameEngine {
 			return;
 		}
 
-		// Below is help menu
+		// below is help menu
 		if (showHelp) {
-			// Below are the instructions for the game
+			// below are the instructions for the game
 			changeColor(white);
 			drawBoldText(90, 80, "How to Play", 24);
 			drawText(50, 120, "← → : Move", 20);
@@ -189,9 +214,9 @@ public class Tetris extends GameEngine {
 			return;
 		}
 
-		// Below is paused menu
+		// below is paused menu
 		if (isPaused) {
-			// Below displays the pause menu options, when a user presses down or up arrow it will highlight the option
+			// below displays the pause menu options, when a user presses down or up arrow it will highlight the option
 			// awaiting the user to press enter to select an option.
 			changeColor(white);
 			drawBoldText(100, 100, "Game Paused", 24);
@@ -203,7 +228,7 @@ public class Tetris extends GameEngine {
 			return;
 		}
 
-		// Draw the current falling piece
+		// draw the current falling piece
 		for (int[] block : activeShape) {
 			int px = pieceX + block[0];
 			int py = pieceY + block[1];
@@ -211,7 +236,21 @@ public class Tetris extends GameEngine {
 			drawSolidRectangle((px + 1) * 20 + 1, py * 20 + 1, 18, 18);
 		}
 
-		// Draw the score and level
+		// draw the ghost piece (same color for now)
+		int[][] ghostBlocks = computeGhostCoordinates();
+		changeColor(tileColors[pieceColor]);  // we'll change to semi transparent later
+		// pick your normal color
+		Color base = tileColors[pieceColor];
+		// build a 50%-opaque copy (alpha = 128 out of 255)
+		Color translucent = new Color(base.getRed(), base.getGreen(), base.getBlue(), 88); // alpha channel: 0..255
+		changeColor(translucent);
+		for (int[] block : ghostBlocks) {
+			int px = block[0];
+			int py = block[1];
+			drawSolidRectangle((px + 1) * 20 + 1, py * 20 + 1, 18, 18);
+		}
+
+		// draw the score and level
 		changeColor(black);
 		drawSolidRectangle(WIDTH * 20 + 45, 0, mWidth - WIDTH * 20, mHeight);
 
@@ -300,7 +339,6 @@ public class Tetris extends GameEngine {
 		int newLevel = (playerScore / 5000) + 1;
 		if (newLevel > currentLevel) {
 			currentLevel = newLevel;
-			gameStepDelay = Math.max(0.1f, 1f - (currentLevel - 1) * 0.1f);
 		}
 	}
 
@@ -351,43 +389,120 @@ public class Tetris extends GameEngine {
 		spawnPiece(rand(7));
 	}
 
-	// Rotate the tetromino if there's room
 	public void rotatePiece() {
-		for (int[] block : activeShape) {
-			int x = pieceX + block[1];
-			int y = pieceY - block[0];
-			if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT || grid[x][y] != 0) return;
-		}
+		// O piece (id=3) does not rotate
+		int shapeId = pieceColor - 1;
+		if (shapeId == 3) return;
+
+		// Compute pivot (we’ll use block index 1)
+		int pivotX = pieceX + activeShape[1][0];
+		int pivotY = pieceY + activeShape[1][1];
+
+		// Prepare an array for candidate positions
+		int[][] candidate = new int[4][2];
+
 		for (int i = 0; i < 4; i++) {
-			int temp = activeShape[i][0];
-			activeShape[i][0] = activeShape[i][1];
-			activeShape[i][1] = -temp;
+			// original absolute coords
+			int absX = pieceX + activeShape[i][0];
+			int absY = pieceY + activeShape[i][1];
+
+			// relative to pivot
+			int dx = absX - pivotX;
+			int dy = absY - pivotY;
+
+			// 90° rotation
+			int ndx = -dy;
+			int ndy =  dx;
+
+			// new absolute
+			int rx = pivotX + ndx;
+			int ry = pivotY + ndy;
+
+			candidate[i][0] = rx;
+			candidate[i][1] = ry;
 		}
+
+		// Collision check
+		for (int i = 0; i < 4; i++) {
+			int x = candidate[i][0];
+			int y = candidate[i][1];
+			// out of bounds?
+			if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
+				return; // abort rotation
+			}
+			// colliding with existing blocks?
+			if (grid[x][y] != 0) {
+				return; // abort rotation
+			}
+		}
+
+		// 5) Commit rotation:
+		// update activeShape to new relative positions
+		for (int i = 0; i < 4; i++) {
+			activeShape[i][0] = candidate[i][0] - pieceX;
+			activeShape[i][1] = candidate[i][1] - pieceY;
+		}
+//		for (int i = 0; i < 4; i++) { // show current shape
+//			System.out.println(activeShape[0][0] + " " + activeShape[0][1]);
+//			System.out.println(activeShape[1][0] + " " + activeShape[1][1]);
+//			System.out.println(activeShape[2][0] + " " + activeShape[2][1]);
+//			System.out.println(activeShape[3][0] + " " + activeShape[3][1]);
+//		}
+	}
+
+	// Locks the current piece into the grid, clears lines, then spawns a new piece
+	// If spawn collides immediately, sets isGameOver = true
+	private void lockPiece() {
+		// write shape into grid
+		for (int[] block : activeShape) {
+			int x = pieceX + block[0];
+			int y = pieceY + block[1];
+			grid[x][y] = pieceColor;
+		}
+
+		checkCompletedRows();          // score & level logic
+		spawnPiece(rand(7));          // new random piece
+	}
+
+	private int[][] computeGhostCoordinates() {
+		int ghostY = pieceY;
+		while (true) {
+			boolean willLand = false;
+			for (int[] block : activeShape) {
+				int x = pieceX + block[0];
+				int y = ghostY + block[1] + 1;
+				if (y >= HEIGHT || grid[x][y] != 0) {
+					willLand = true;
+					break;
+				}
+			}
+			if (willLand) break;
+			ghostY++;
+		}
+
+		// return a new array of ghost block coordinates
+		int[][] ghostBlocks = new int[4][2];
+		for (int i = 0; i < 4; i++) {
+			ghostBlocks[i][0] = pieceX + activeShape[i][0];
+			ghostBlocks[i][1] = ghostY + activeShape[i][1];
+		}
+		return ghostBlocks;
 	}
 
 	// Handle key press inputs
 	public void keyPressed(KeyEvent e) {
-		// Closes help screen with ESC key
-		if (showHelp && e.getKeyCode() == KeyEvent.VK_ESCAPE) {
-			showHelp = false;
-			isPaused = true;
-			return;
-		}
-		// Restarts game with R key after game over
 		if (isGameOver && e.getKeyCode() == KeyEvent.VK_R) {
 			restartGame();
 			return;
 		}
-
-		// Toggles the pause menu with ESC key, can pause or unpause the game with ESC key
-		if (!showHelp && e.getKeyCode() == KeyEvent.VK_ESCAPE) {
-			isPaused = !isPaused;
-			return;
+		if (showHelp && e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+			showHelp = false; isPaused = true; return;
 		}
-
-		// Navigate and selects pause menu options
+		if (!showHelp && e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+			isPaused = !isPaused; return;
+		}
 		if (isPaused) {
-			// Below handles the up/down and enter keys in the pause menu
+			// below handles the up/down and enter keys in the pause menu
 			if (e.getKeyCode() == KeyEvent.VK_UP)
 				pauseMenuSelection = (pauseMenuSelection + pauseMenuOptions.length - 1) % pauseMenuOptions.length;
 			else if (e.getKeyCode() == KeyEvent.VK_DOWN)
@@ -401,7 +516,6 @@ public class Tetris extends GameEngine {
 					}
 					case "Help" -> {
 						showHelp = true;
-						isPaused = false;
 					}
 					case "Quit" -> System.exit(0);
 				}
@@ -410,20 +524,46 @@ public class Tetris extends GameEngine {
 		}
 
 		switch (e.getKeyCode()) {
-			case KeyEvent.VK_LEFT -> { moveLeftPressed = true; holdLeft = true; }
-			case KeyEvent.VK_RIGHT -> { moveRightPressed = true; holdRight = true; }
-			case KeyEvent.VK_DOWN -> { moveDownPressed = true; holdDown = true; }
-			case KeyEvent.VK_UP -> rotatePressed = true;
-			case KeyEvent.VK_SPACE -> dropPressed = true;
+			case KeyEvent.VK_LEFT:
+				leftHeld = true;
+				leftHeldTime = 0;
+				moveLeft();
+				break;
+			case KeyEvent.VK_RIGHT:
+				rightHeld = true;
+				rightHeldTime = 0;
+				moveRight();
+				break;
+			case KeyEvent.VK_DOWN:
+				softDropping = true;
+				// one immediate soft drop
+				if (!isLanded()) {
+					pieceY++;
+					fallTimer = 0;
+				}
+				break;
+			case KeyEvent.VK_SPACE:
+				// hard drop
+				instantDrop();
+				break;
+			case KeyEvent.VK_UP:
+				rotatePiece();
+				break;
 		}
 	}
 
 	// Handle key release inputs
 	public void keyReleased(KeyEvent e) {
 		switch (e.getKeyCode()) {
-			case KeyEvent.VK_LEFT -> holdLeft = false;
-			case KeyEvent.VK_RIGHT -> holdRight = false;
-			case KeyEvent.VK_DOWN -> holdDown = false;
+			case KeyEvent.VK_LEFT:
+				leftHeld = false;
+				break;
+			case KeyEvent.VK_RIGHT:
+				rightHeld = false;
+				break;
+			case KeyEvent.VK_DOWN:
+				softDropping = false;
+				break;
 		}
 	}
 }
