@@ -1,0 +1,160 @@
+import java.awt.Color;
+import java.awt.event.KeyEvent;
+
+public class TetrisGame extends GameEngine {
+
+    private Board board;
+    private Piece currentPiece;
+    private ScoreManager scoreManager;
+    private GameState gameState;
+    private InputHandler inputHandler;
+    private Renderer renderer;
+
+    // Tile palette
+    private Color[] tileColors = {black, cyan, blue, orange, yellow, green, pink, red}; // From GameEngine
+
+    // Fall & lock timers
+    private double fallInterval = 1.0; // Base fall interval
+    private double fallTimer = 0.0;
+    private final double lockDelay = 0.5;
+    private double lockTimer = 0.0;
+
+
+    public static void main(String[] args) {
+        createGame(new TetrisGame(), 30); // Framerate
+    }
+
+    @Override
+    public void init() {
+        setWindowSize(350, 420); // Adjust as needed, considering score panel
+        
+        board = new Board();
+        scoreManager = new ScoreManager();
+        gameState = new GameState();
+        // currentPiece is initialized by calling spawnNewPiece which itself is called by restartGame->resetGame
+        // However, Piece needs board, so we can instantiate it after board.
+        // The actual active piece is created via spawnNewPiece.
+        // We can pass a null piece to renderer initially or handle it.
+
+        inputHandler = new InputHandler(this);
+        
+        // Initialize currentPiece *after* board
+        // Piece needs board for its dimensions and collision checks
+        currentPiece = new Piece(board); // Create an initial piece instance
+                                          // The renderer will be updated with new pieces as they spawn
+        
+        renderer = new Renderer(this, board, currentPiece, scoreManager, gameState, tileColors);
+
+        restartGame(); // This will set up the initial game state including spawning the first piece
+    }
+    
+    public void resetFallTimer() {
+        this.fallTimer = 0;
+    }
+
+    public void restartGame() {
+        gameState.reset();
+        scoreManager.reset();
+        board.clearBoard();
+        inputHandler.resetDAS(); // Reset DAS/ARR state
+        fallTimer = 0;
+        lockTimer = 0;
+        spawnNewPiece(); // This will create and assign a new piece to currentPiece
+        renderer.setPiece(currentPiece); // Ensure renderer has the new piece
+        updateFallInterval(); // Set fall speed based on level 1
+    }
+    
+    private void spawnNewPiece() {
+        currentPiece.spawnNewPiece(); // Re-use the existing Piece object by respawning it
+        renderer.setPiece(currentPiece); // Update renderer's reference if it stores one directly
+        if (currentPiece.checkSpawnCollision()) {
+            gameState.setGameOver(true);
+        }
+        fallTimer = 0;
+        lockTimer = 0;
+    }
+
+    private void updateFallInterval() {
+        // Adjust fallInterval based on scoreManager.getLevel()
+        // Example: fallInterval = Math.max(0.1, 1.0 - (scoreManager.getLevel() -1) * 0.05);
+        // This is a placeholder, use the original game's speed curve if available
+         double baseInterval = 1.0;
+         int level = scoreManager.getLevel();
+         // A common formula: speed increases by making interval shorter
+         fallInterval = Math.pow(0.8 - ((level - 1) * 0.007), level -1) * baseInterval;
+         fallInterval = Math.max(0.05, fallInterval); // Prevent it from becoming too fast or zero/negative
+    }
+
+
+    @Override
+    public void update(double dt) {
+        double maxDt = 0.1; // Clamp dt to avoid large jumps
+		if(dt > maxDt) dt = maxDt;
+
+        gameState.updateCountdown(); // Handles countdown state
+        inputHandler.update(dt);     // Handles continuous input like DAS
+
+        if (gameState.isGameOver() || gameState.isPaused() || gameState.isShowCountdown() || gameState.isShowHelp()) {
+            return; // Game logic is paused
+        }
+
+        // Piece falling and locking logic
+        double currentFallSpeed = inputHandler.isSoftDropping() ? (fallInterval / 20.0) : fallInterval;
+        fallTimer += dt;
+
+        while (fallTimer >= currentFallSpeed) {
+            fallTimer -= currentFallSpeed;
+            if (currentPiece.isLanded()) {
+                lockTimer += currentFallSpeed; // Increment by the interval amount
+                if (lockTimer >= lockDelay) {
+                    lockPiece();
+                    // lockPiece already calls spawnNewPiece and checks for game over
+                    // No need to return immediately unless lockPiece does everything
+                }
+            } else {
+                currentPiece.moveDown();
+                lockTimer = 0; // Reset lock timer if piece moves down
+            }
+        }
+    }
+    
+    private void lockPiece() {
+        currentPiece.lockPiece(); // Piece places itself on the board
+        board.checkAndClearCompletedRows(scoreManager, scoreManager.getLevel());
+        updateFallInterval(); // Update speed for next piece based on new score/level
+        spawnNewPiece(); // Spawns a new piece and checks for game over
+        lockTimer = 0; // Reset lock timer for the new piece
+        fallTimer = 0; // Reset fall timer for the new piece
+    }
+
+    public void hardDrop() {
+        if (currentPiece == null || gameState.isGameOver() || gameState.isPaused()) return;
+        while (!currentPiece.isLanded()) {
+            currentPiece.moveDown();
+        }
+        lockPiece(); // Use the unified lockPiece logic
+    }
+
+
+    @Override
+    public void paintComponent() {
+        renderer.render();
+    }
+
+    @Override
+    public void keyPressed(KeyEvent e) {
+        inputHandler.keyPressed(e);
+    }
+
+    @Override
+    public void keyReleased(KeyEvent e) {
+        inputHandler.keyReleased(e);
+    }
+
+    // Getters for other classes to access necessary game components
+    public Board getBoard() { return board; }
+    public Piece getCurrentPiece() { return currentPiece; }
+    public ScoreManager getScoreManager() { return scoreManager; }
+    public GameState getGameState() { return gameState; }
+    public Renderer getRenderer() { return renderer; }
+}
