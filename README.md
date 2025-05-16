@@ -2,12 +2,6 @@
 
 Welcome to the Tetris Game project built using Java and object-oriented programming principles. This project demonstrates a modular design of a classic puzzle game using clean architecture, game loop logic, and custom rendering.
 
-## 🧩 Class Diagram
-
-![Tetris UML Diagram](.//Tetris%20Game%20Classes.png)
-
-*This UML diagram illustrates the main architecture of the Tetris game and how different components interact with each other.*
-
 ## 🗂️ Code Structure
 
 | Class         | Description                                                                 |
@@ -19,3 +13,11 @@ Welcome to the Tetris Game project built using Java and object-oriented programm
 | `GameState`   | Handles game status like pause, game over, and menu options.                |
 | `InputHandler`| Deals with player inputs (keyboard events).                                 |
 | `Renderer`    | Renders game objects using custom graphics engine.                          |
+
+📹 [Watch the gameplay video](assets/game_play.mp4)
+
+## 🧩 Class Diagram
+
+![Tetris UML Diagram](assets/Tetris_Game%20_Classes.png)
+
+*This UML diagram illustrates the main architecture of the Tetris game and how different components interact with each other.*
