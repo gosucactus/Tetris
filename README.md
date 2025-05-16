@@ -14,7 +14,21 @@ Welcome to the Tetris Game project built using Java and object-oriented programm
 | `InputHandler`| Deals with player inputs (keyboard events).                                 |
 | `Renderer`    | Renders game objects using custom graphics engine.                          |
 
-📹 [Watch the gameplay video](assets/game_play.mp4)
+## 🖼️ Game Snapshots
+
+Below are some gameplay screenshots showing different game states:
+
+### ▶️ Game Start
+![Game Start](assets/Game1.png)
+
+### ▶️ Ghost Pieces
+![Game Start](assets/Game2.png)
+
+### 🧱 Help Screen
+![Gameplay](assets/Game_help.png)
+
+### 💥 Pause Menu
+![Game Over](assets/Game_pause.png)
 
 ## 🧩 Class Diagram
 
