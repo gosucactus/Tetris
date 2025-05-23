@@ -25,7 +25,7 @@ public class ScoreManager {
         int newLevel = (playerScore / 5000) + 1;
         if (newLevel > currentLevel) {
             currentLevel = newLevel;
-            // Potentially increase game speed here or notify GameState/TetrisGame
+            // increase game speed here or notify GameState/TetrisGame
         }
     }
     
