@@ -18,7 +18,7 @@ public class Renderer {
         this.gameState = gameState;
         this.tileColors = tileColors;
     }
-    
+
     public void setPiece(Piece currentPiece) {
         this.piece = currentPiece;
     }
@@ -50,23 +50,23 @@ public class Renderer {
             drawPauseMenu();
             return;
         }
-        
+
         // Only draw piece and ghost if game is active
         if (piece != null) {
             drawGhostPiece();
             drawCurrentPiece();
         }
-        
+
         drawScoreAndLevel();
     }
 
     private void drawGridLines() {
-        ge.changeColor(50, 50, 50); // subtle grey
+        ge.changeColor(50, 50, 50);
         for (int x = 0; x <= board.WIDTH; x++) {
             int px = (x + 1) * 20;
-            ge.drawLine(px, 0, px, board.HEIGHT * 20);
+            ge.drawLine(px, 0, px, board.VISIBLE_HEIGHT * 20);
         }
-        for (int y = 0; y <= board.HEIGHT; y++) {
+        for (int y = 0; y <= board.VISIBLE_HEIGHT; y++) {
             int py = y * 20;
             ge.drawLine(20, py, (board.WIDTH + 1) * 20, py);
         }
@@ -74,22 +74,27 @@ public class Renderer {
 
     private void drawBorderWalls() {
         ge.changeColor(128, 128, 128);
-        for (int y = 0; y <= board.HEIGHT; y++) {
+        // Draw vertical walls for the visible height
+        for (int y = 0; y <= board.VISIBLE_HEIGHT; y++) {
             ge.drawSolidRectangle(1, y * 20 + 1, 18, 18);
             ge.drawSolidRectangle((board.WIDTH + 1) * 20 + 1, y * 20 + 1, 18, 18);
         }
+        // Draw bottom wall
         for (int x = 0; x < board.WIDTH; x++) {
-            ge.drawSolidRectangle((x + 1) * 20 + 1, board.HEIGHT * 20 + 1, 18, 18);
+            ge.drawSolidRectangle((x + 1) * 20 + 1, board.VISIBLE_HEIGHT * 20 + 1, 18, 18);
         }
     }
 
     private void drawPlacedTiles() {
         int[][] grid = board.getGrid();
-        for (int y = 0; y < board.HEIGHT; y++) {
+        // Only draw the visible portion
+        for (int y = board.BUFFER_HEIGHT; y < board.TOTAL_HEIGHT; y++) {
             for (int x = 0; x < board.WIDTH; x++) {
                 if (grid[x][y] != 0) {
                     ge.changeColor(tileColors[grid[x][y]]);
-                    ge.drawSolidRectangle((x + 1) * 20 + 1, y * 20 + 1, 18, 18);
+                    // Adjust y coordinate to account for buffer
+                    int displayY = y - board.BUFFER_HEIGHT;
+                    ge.drawSolidRectangle((x + 1) * 20 + 1, displayY * 20 + 1, 18, 18);
                 }
             }
         }
@@ -102,13 +107,15 @@ public class Renderer {
         for (int[] block : shape) {
             int px = piece.getX() + block[0];
             int py = piece.getY() + block[1];
-            // Only draw if within visible board area (optional, GameEngine might handle clipping)
-            if (py >= 0) { 
-                 ge.drawSolidRectangle((px + 1) * 20 + 1, py * 20 + 1, 18, 18);
+            // Only draw if in visible area (below buffer zone)
+            if (py >= board.BUFFER_HEIGHT) {
+                // Adjust y coordinate to account for buffer
+                int displayY = py - board.BUFFER_HEIGHT;
+                ge.drawSolidRectangle((px + 1) * 20 + 1, displayY * 20 + 1, 18, 18);
             }
         }
     }
-    
+
     private void drawGhostPiece() {
         if (piece == null) return;
         int[][] ghostBlocks = piece.getGhostCoordinates();
@@ -116,10 +123,13 @@ public class Renderer {
         Color translucent = new Color(base.getRed(), base.getGreen(), base.getBlue(), 88);
         ge.changeColor(translucent);
         for (int[] block : ghostBlocks) {
-            int px = block[0]; // ghostCoordinates are absolute
+            int px = block[0];
             int py = block[1];
-             if (py >= 0) {
-                ge.drawSolidRectangle((px + 1) * 20 + 1, py * 20 + 1, 18, 18);
+            // Only draw if in visible area
+            if (py >= board.BUFFER_HEIGHT) {
+                // Adjust y coordinate to account for buffer
+                int displayY = py - board.BUFFER_HEIGHT;
+                ge.drawSolidRectangle((px + 1) * 20 + 1, displayY * 20 + 1, 18, 18);
             }
         }
     }
@@ -127,7 +137,7 @@ public class Renderer {
     private void drawScoreAndLevel() {
         // Assuming a fixed position for score/level display
         ge.changeColor(ge.black); // Clear area for text
-        ge.drawSolidRectangle(board.WIDTH * 20 + 25, 0, ge.mWidth - (board.WIDTH * 20 + 25) , ge.mHeight);
+        ge.drawSolidRectangle(board.WIDTH * 20 + 40, 0, ge.mWidth - (board.WIDTH * 20 + 25) , ge.mHeight);
 
 
         ge.changeColor(ge.white);

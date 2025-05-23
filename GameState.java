@@ -40,7 +40,7 @@ public class GameState {
             countdownStartTime = System.currentTimeMillis();
         }
     }
-    
+
     public void updateCountdown() {
         if (showCountdown) {
             long elapsed = (long) ((System.currentTimeMillis() - countdownStartTime) / (1000 / 1.5));
@@ -49,7 +49,7 @@ public class GameState {
             }
         }
     }
-    
+
     public long getCountdownRemaining() {
         if (!showCountdown) return 0;
         long elapsed = (long)((System.currentTimeMillis() - countdownStartTime) / (1000 / 1.5));

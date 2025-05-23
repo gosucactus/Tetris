@@ -1,39 +1,47 @@
 public class ScoreManager {
     private int playerScore;
     private int currentLevel;
+    private int totalLinesCleared;
+    private static final int MAX_LEVEL = 15;
+    private static final int LINES_PER_LEVEL = 10;
 
     public ScoreManager() {
-        playerScore = 0;
-        currentLevel = 1;
+        reset();
     }
 
     public void addScoreForLines(int linesCleared, int level) {
-        int basePoints = 1500; // Or some other base value
-        int pointsEarned = 0;
+        // Base points per line clear type
+        int basePoints = 0;
         switch (linesCleared) {
-            case 1: pointsEarned = basePoints * level; break;
-            case 2: pointsEarned = (basePoints * 2) * level; break;
-            case 3: pointsEarned = (basePoints * 3) * level; break;
-            case 4: pointsEarned = (basePoints * 5) * level; break;
+            case 1: basePoints = 100; break;  // Single
+            case 2: basePoints = 300; break;  // Double
+            case 3: basePoints = 500; break;  // Triple
+            case 4: basePoints = 800; break;  // Tetris
         }
-        playerScore += pointsEarned;
+        
+        // Multiply points by level
+        playerScore += basePoints * level;
+        
+        // Update total lines and check for level up
+        totalLinesCleared += linesCleared;
         updateLevel();
     }
 
     private void updateLevel() {
-        // Example logic: increase level every 5000 points
-        int newLevel = (playerScore / 5000) + 1;
+        // Level increases every 10 lines, max level is 15
+        int newLevel = Math.min(MAX_LEVEL, 1 + (totalLinesCleared / LINES_PER_LEVEL));
         if (newLevel > currentLevel) {
             currentLevel = newLevel;
-            // Potentially increase game speed here or notify GameState/TetrisGame
         }
     }
-    
+
     public void reset() {
         playerScore = 0;
         currentLevel = 1;
+        totalLinesCleared = 0;
     }
 
     public int getScore() { return playerScore; }
     public int getLevel() { return currentLevel; }
+    public int getTotalLines() { return totalLinesCleared; }
 }
