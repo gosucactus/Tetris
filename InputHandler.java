@@ -19,7 +19,7 @@ public class InputHandler {
         if (game.getGameState().isGameOver() || game.getGameState().isPaused() || game.getGameState().isShowCountdown()) {
             return;
         }
-        
+
         // DAS/ARR for L/R movement
         if (leftHeld) {
             leftHeldTime += dt;
@@ -38,7 +38,7 @@ public class InputHandler {
             }
         }
     }
-    
+
     public void keyPressed(KeyEvent e) {
         GameState gameState = game.getGameState();
         Piece currentPiece = game.getCurrentPiece();
@@ -59,7 +59,7 @@ public class InputHandler {
         if (!gameState.isShowHelp() && e.getKeyCode() == KeyEvent.VK_ESCAPE) {
             gameState.setPaused(!gameState.isPaused());
             if (!gameState.isPaused() && !gameState.isShowCountdown()) { // If unpausing directly
-                 // gameState.setShowCountdown(true); // Optionally trigger countdown on Esc resume
+                // gameState.setShowCountdown(true); // Optionally trigger countdown on Esc resume
             }
             return;
         }
@@ -87,7 +87,7 @@ public class InputHandler {
             }
             return;
         }
-        
+
         // Active game key presses
         if (gameState.isShowCountdown()) return; // No game actions during countdown
 
@@ -112,8 +112,14 @@ public class InputHandler {
             case KeyEvent.VK_SPACE:
                 if (currentPiece != null) game.hardDrop();
                 break;
-            case KeyEvent.VK_UP: // Rotate
-                if (currentPiece != null) currentPiece.rotate();
+            case KeyEvent.VK_UP:    // Clockwise rotation
+                game.rotatePiece(true);
+                break;
+            case KeyEvent.VK_Z:     // Counter-clockwise rotation
+                game.rotatePiece(false);
+                break;
+            case KeyEvent.VK_C:     // Hold piece
+                game.holdPiece();
                 break;
         }
     }
@@ -137,7 +143,7 @@ public class InputHandler {
     public boolean isSoftDropping() {
         return softDropping;
     }
-    
+
     public void resetDAS() {
         leftHeld = false;
         rightHeld = false;
