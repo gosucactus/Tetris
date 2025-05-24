@@ -1,54 +1,80 @@
-import java.util.Random;
+import java.util.List;
 
 public class Piece {
     private int pieceX;
     private int pieceY;
     private int pieceColor;
     private int[][] activeShape;
-    private Board board; // Reference to the game board for collision detection
+    private Board board;
+    private static PieceGenerator pieceGenerator;
 
-    // All seven tetriminos
-    private static final int[][][] SHAPES = {
+    // Define the shapes of all tetriminoes (0=I, 1=J, 2=L, 3=O, 4=S, 5=T, 6=Z)
+    public static final int[][][] SHAPES = {
             {{-1, 0}, {0, 0}, {1, 0}, {2, 0}}, // I
-            {{-1, 0}, {0, 0}, {1, 0}, {1, 1}}, // J
-            {{-1, 1}, {-1, 0}, {0, 0}, {1, 0}}, // L
+            {{-1, 1}, {0, 1}, {1, 1}, {1, 0}}, // J
+            {{-1, 1}, {0, 1}, {1, 1}, {-1, 0}}, // L
             {{0, 0}, {0, 1}, {1, 0}, {1, 1}}, // O
             {{-1, 1}, {0, 1}, {0, 0}, {1, 0}}, // S
-            {{-1, 0}, {0, 0}, {1, 0}, {0, 1}}, // T
+            {{-1, 1}, {0, 1}, {1, 1}, {0, 0}}, // T
             {{-1, 0}, {0, 0}, {0, 1}, {1, 1}}  // Z
     };
-    private static Random random = new Random();
 
+    // Constructor
     public Piece(Board board) {
         this.board = board;
         this.activeShape = new int[4][2];
-        spawnNewPiece();
+        if (pieceGenerator == null) {
+            pieceGenerator = new PieceGenerator();
+        }
     }
 
     public void spawnNewPiece() {
-        int shapeId = random.nextInt(SHAPES.length);
-        pieceX = board.WIDTH / 2;
-        pieceY = 0; // Start at the very top or one row above visible
-        pieceColor = shapeId + 1; // Color based on shape index (+1 because 0 is empty)
+        int shapeId = pieceGenerator.getNextPiece();
+        // Normal spawn position at top of visible playfield
+        pieceY = board.BUFFER_HEIGHT; // First visible row
+        pieceX = (board.WIDTH / 2) - 1; // Centered, but 1 block left of center
+        pieceColor = shapeId + 1;
 
+        // Copy the shape from SHAPES array
         for (int i = 0; i < 4; i++) {
             activeShape[i][0] = SHAPES[shapeId][i][0];
             activeShape[i][1] = SHAPES[shapeId][i][1];
         }
-    }
-    
-    // Checks if the piece overlaps with the board or is out of bounds at its current spawn location
-    public boolean checkSpawnCollision() {
-        for (int[] block : activeShape) {
-            int x = pieceX + block[0];
-            int y = pieceY + block[1];
-            if (board.isOccupied(x, y)) {
-                return true; // Collision
-            }
+
+        // Special case: I piece spawns one row lower
+        if (shapeId == 0) { // I piece
+            pieceY++;
         }
-        return false; // No collision
     }
 
+    // New method to spawn a specific piece, bypassing the generator
+    public void spawnSpecificPiece(int shapeId) {
+        // Normal spawn position at top of visible playfield
+        pieceY = board.BUFFER_HEIGHT; // First visible row
+        pieceX = (board.WIDTH / 2) - 1; // Centered
+        pieceColor = shapeId + 1;
+
+        // Copy the shape from SHAPES array
+        for (int i = 0; i < 4; i++) {
+            activeShape[i][0] = SHAPES[shapeId][i][0];
+            activeShape[i][1] = SHAPES[shapeId][i][1];
+        }
+
+        // Special case: I piece spawns one row lower
+        if (shapeId == 0) {
+            pieceY++;
+        }
+    }
+
+    // Checks if the piece overlaps with the board or is out of bounds at its current spawn location
+    public boolean checkSpawnCollision() {
+        return !isValidPosition(activeShape, pieceX, pieceY);
+    }
+
+    // Add method to check for lock out condition
+    public boolean isLockOut() {
+        return board.isPieceInBufferZone(activeShape, pieceX, pieceY);
+    }
 
     public boolean moveLeft() {
         if (canMove(-1, 0)) {
@@ -89,43 +115,6 @@ public class Piece {
         }
         return true;
     }
-    
-    public void rotate() {
-        int shapeId = pieceColor - 1; // Assuming color is shapeId + 1
-        if (shapeId == 3) return; // O piece does not rotate
-
-        int[][] candidate = new int[4][2];
-        // Pivot is the second block of the shape definition (SHAPES[shapeId][1])
-        // relative to the piece's current activeShape
-        // For simplicity, we'll use the current activeShape[1] as the reference for pivot *calculation*
-        // The actual pivot point is absolute: (pieceX + activeShape[1][0], pieceY + activeShape[1][1])
-
-        int pivotRelX = activeShape[1][0];
-        int pivotRelY = activeShape[1][1];
-
-        for (int i = 0; i < 4; i++) {
-            int currentRelX = activeShape[i][0];
-            int currentRelY = activeShape[i][1];
-
-            // Translate to be relative to the pivot block
-            int dx = currentRelX - pivotRelX;
-            int dy = currentRelY - pivotRelY;
-
-            // Rotate: (x, y) -> (-y, x) for 90 deg clockwise
-            int newRelDx = -dy;
-            int newRelDy = dx;
-
-            // Translate back from pivot block's perspective
-            candidate[i][0] = pivotRelX + newRelDx; // New relative X
-            candidate[i][1] = pivotRelY + newRelDy; // New relative Y
-        }
-
-        // Collision check for the rotated shape
-        if (isValidPosition(candidate, pieceX, pieceY)) {
-            activeShape = candidate; // Commit rotation
-        }
-    }
-
 
     private boolean isValidPosition(int[][] shape, int newPieceX, int newPieceY) {
         for (int[] block : shape) {
@@ -143,18 +132,15 @@ public class Piece {
             board.placePiece(pieceX + block[0], pieceY + block[1], pieceColor);
         }
     }
-    
+
     public int[][] getGhostCoordinates() {
         int ghostY = pieceY;
-        int[][] currentShape = getShape();
-        int currentX = getX();
-
         while (true) {
             boolean willLand = false;
-            for (int[] block : currentShape) {
-                int x = currentX + block[0];
-                int y = ghostY + block[1] + 1; // Check one step below
-                if (y >= board.HEIGHT || (board.isWithinBounds(x,y) && board.grid[x][y] != 0)) {
+            for (int[] block : activeShape) {
+                int x = pieceX + block[0];
+                int y = ghostY + block[1] + 1;
+                if (!board.isWithinBounds(x, y) || board.isOccupied(x, y)) {
                     willLand = true;
                     break;
                 }
@@ -165,8 +151,8 @@ public class Piece {
 
         int[][] ghostBlocks = new int[4][2];
         for (int i = 0; i < 4; i++) {
-            ghostBlocks[i][0] = currentX + currentShape[i][0];
-            ghostBlocks[i][1] = ghostY + currentShape[i][1];
+            ghostBlocks[i][0] = pieceX + activeShape[i][0];
+            ghostBlocks[i][1] = ghostY + activeShape[i][1];
         }
         return ghostBlocks;
     }
@@ -179,4 +165,91 @@ public class Piece {
     public void setX(int x) { this.pieceX = x; }
     public int getColor() { return pieceColor; }
     public int[][] getShape() { return activeShape; }
+    public PieceGenerator getPieceGenerator() {
+        return pieceGenerator;
+    }
+
+    public boolean rotateClockwise() {
+        int shapeId = pieceColor - 1;
+        if (shapeId == 3) return false; // O piece does not rotate
+
+        int[][] candidate = new int[4][2];
+        // Use second block as pivot point
+        int pivotRelX = activeShape[1][0];
+        int pivotRelY = activeShape[1][1];
+
+        for (int i = 0; i < 4; i++) {
+            int currentRelX = activeShape[i][0];
+            int currentRelY = activeShape[i][1];
+
+            // Translate to pivot's coordinate space
+            int dx = currentRelX - pivotRelX;
+            int dy = currentRelY - pivotRelY;
+
+            // Rotate clockwise: (x, y) -> (-y, x)
+            int newRelDx = -dy;
+            int newRelDy = dx;
+
+            // Translate back
+            candidate[i][0] = pivotRelX + newRelDx;
+            candidate[i][1] = pivotRelY + newRelDy;
+        }
+
+        // Check if rotation is valid
+        if (isValidPosition(candidate, pieceX, pieceY)) {
+            // Copy rotated position to activeShape
+            for (int i = 0; i < 4; i++) {
+                activeShape[i][0] = candidate[i][0];
+                activeShape[i][1] = candidate[i][1];
+            }
+            return true;
+        }
+        return false;
+    }
+
+    public boolean rotateCounterClockwise() {
+        int shapeId = pieceColor - 1;
+        if (shapeId == 3) return false; // O piece does not rotate
+
+        int[][] candidate = new int[4][2];
+        // Use second block as pivot point
+        int pivotRelX = activeShape[1][0];
+        int pivotRelY = activeShape[1][1];
+
+        for (int i = 0; i < 4; i++) {
+            int currentRelX = activeShape[i][0];
+            int currentRelY = activeShape[i][1];
+
+            // Translate to pivot's coordinate space
+            int dx = currentRelX - pivotRelX;
+            int dy = currentRelY - pivotRelY;
+
+            // Rotate counter-clockwise: (x, y) -> (y, -x)
+            int newRelDx = dy;
+            int newRelDy = -dx;
+
+            // Translate back
+            candidate[i][0] = pivotRelX + newRelDx;
+            candidate[i][1] = pivotRelY + newRelDy;
+        }
+
+        // Check if rotation is valid
+        if (isValidPosition(candidate, pieceX, pieceY)) {
+            // Copy rotated position to activeShape
+            for (int i = 0; i < 4; i++) {
+                activeShape[i][0] = candidate[i][0];
+                activeShape[i][1] = candidate[i][1];
+            }
+            return true;
+        }
+        return false;
+    }
+
+    public List<Integer> getNextPieces() {
+        return pieceGenerator.peekNextPieces();
+    }
+
+    public int getPieceType() {
+        return pieceColor - 1;
+    }
 }
