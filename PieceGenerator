@@ -1,0 +1,65 @@
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class PieceGenerator {
+    private List<Integer> currentBag;
+    private List<Integer> nextBag;  // Add a second bag
+    private static final int BAG_SIZE = 7;
+    private static final int PREVIEW_SIZE = 3;
+
+    public PieceGenerator() {
+        currentBag = new ArrayList<>();
+        nextBag = new ArrayList<>();
+        fillNewBag(currentBag);  // Fill first bag
+        fillNewBag(nextBag);     // Pre-fill next bag
+    }
+
+    public int getNextPiece() {
+        if (currentBag.isEmpty()) {
+            currentBag = nextBag;         // Current bag is now the next bag
+            nextBag = new ArrayList<>();    // Create new next bag
+            fillNewBag(nextBag);           // Fill the new next bag
+        }
+        return currentBag.remove(0);
+    }
+
+    private void fillNewBag(List<Integer> bag) {
+        bag.clear();
+        for (int i = 0; i < BAG_SIZE; i++) {
+            bag.add(i);
+        }
+        Collections.shuffle(bag);
+    }
+
+    public List<Integer> peekNextPieces() {
+        List<Integer> preview = new ArrayList<>();
+        
+        // First try to fill from current bag
+        int currentBagPieces = Math.min(PREVIEW_SIZE, currentBag.size());
+        for (int i = 0; i < currentBagPieces; i++) {
+            preview.add(currentBag.get(i));
+        }
+        
+        // If we still need more pieces, ensure nextBag is filled and take from it
+        if (preview.size() < PREVIEW_SIZE) {
+            if (nextBag.isEmpty()) {
+                fillNewBag(nextBag);
+            }
+            int remainingPieces = PREVIEW_SIZE - preview.size();
+            for (int i = 0; i < remainingPieces && i < nextBag.size(); i++) {
+                preview.add(nextBag.get(i));
+            }
+        }
+        
+        // Ensure we always return exactly PREVIEW_SIZE pieces
+        while (preview.size() < PREVIEW_SIZE) {
+            if (nextBag.isEmpty()) {
+                fillNewBag(nextBag);
+            }
+            preview.add(nextBag.get(0));
+        }
+        
+        return preview;
+    }
+}
